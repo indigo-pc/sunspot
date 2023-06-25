@@ -1,5 +1,5 @@
 """
-Testing suite for sunspot.py
+Testing suite for src.py
 All tests used live data fixtures
 """
 
@@ -69,7 +69,6 @@ def test_corresponding_data_multiple_targets_condition( fixture, request ):
 
 def verify_chronology( dates ):
     from datetime import datetime
-    dates = [ sunspot.convert_numeric_month(item) for item in dates ]
     now = datetime.strptime( dates[0], sunspot.DATA_FORMAT )
     for index in range( len(dates) - 1 ):
         then = datetime.strptime( dates[index+1], sunspot.DATA_FORMAT )
@@ -138,20 +137,20 @@ def test_data_date_pairs( fixture, request ):
     for title_index in range( 1, len( e.DATA_TITLES ) ):
         for date_index in range( -1, len( e.dates() ) - 2 ):
             now = e.find_corresponding_data( e.DATA_TITLES[dates_index], e.DATA_TITLES[title_index], e.get_ephemeris_data( e.DATA_TITLES[title_index] )[date_index+1] )
-            now = datetime.strptime( sunspot.convert_numeric_month( now ), sunspot.DATA_FORMAT )
+            now = datetime.strptime( now, sunspot.DATA_FORMAT )
             then = e.find_corresponding_data( e.DATA_TITLES[dates_index], e.DATA_TITLES[title_index], e.get_ephemeris_data( e.DATA_TITLES[title_index] )[date_index+2] )
-            then = datetime.strptime( sunspot.convert_numeric_month( then ), sunspot.DATA_FORMAT )
+            then = datetime.strptime( then, sunspot.DATA_FORMAT )
             assert( then.timestamp() > now.timestamp() )
 
 
 @pytest.fixture
 def fixture_default_args() -> sunspot.Ephemeris:
     """
-    :return: Ephemeris recovers data vectors for a default set of args, e.g., no 5th arg to sunspot.Ephemeris()
+    :return: Ephemeris recovers data vectors for a default set of args, e.g., no 5th arg to src.Ephemeris()
     """
-    return sunspot.Ephemeris(   '1988-12-08 01:02:03',
+    return sunspot.Ephemeris('1988-12-08 01:02:03',
                                 '1990-04-22 04:05:06',
-                                '-71.332597,42.458790,0.041',
+                                '-71.332597, 42.458790, 0.041',
                                 '1 day',
                                 '10')
 
@@ -161,7 +160,7 @@ def fixture_1_args() -> sunspot.Ephemeris:
     """
     :return: Ephemeris recovers only a single data vector (1).
     """
-    return sunspot.Ephemeris(   '1988-12-08 01:02:03',
+    return sunspot.Ephemeris('1988-12-08 01:02:03',
                                 '1990-04-22 04:05:06',
                                 '-71.332597,42.458790,0.041',
                                 '1 day',
@@ -172,9 +171,9 @@ def fixture_1_args() -> sunspot.Ephemeris:
 @pytest.fixture
 def fixture_2_args() -> sunspot.Ephemeris:
     """
-    :return: Ephemeris recovers two data vectors (4 and 2)
+    :return: Ephemeris recovers two data vectors (2 and 4)
     """
-    return sunspot.Ephemeris(   '1988-12-08 01:02:03',
+    return sunspot.Ephemeris('1988-12-08 01:02:03',
                                 '1990-04-22 04:05:06',
                                 '-71.332597,42.458790,0.041',
                                 '1 day',
@@ -185,9 +184,9 @@ def fixture_2_args() -> sunspot.Ephemeris:
 @pytest.fixture
 def fixture_2_args_reversed() -> sunspot.Ephemeris:
     """
-    :return: Ephemeris recovers two data vectors (4 and 2)
+    :return: Ephemeris recovers two data vectors (4 and 2). Start time HH:MM:SS is such that SS = 00.
     """
-    return sunspot.Ephemeris(   '1988-12-08 01:02:03',
+    return sunspot.Ephemeris('1988-12-08 01:02:00',
                                 '1990-04-22 04:05:06',
                                 '-71.332597,42.458790,0.041',
                                 '1 day',
@@ -200,7 +199,7 @@ def fixture_48_args() -> sunspot.Ephemeris:
     """
     :return: Ephemeris recovers all 48 possible data types ('1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48')
     """
-    return sunspot.Ephemeris(   '1988-12-08 01:02:03',
+    return sunspot.Ephemeris('1988-12-08 01:02:03',
                                 '1990-04-22 04:05:06',
                                 '-71.332597,42.458790,0.041',
                                 '1 day',

@@ -1,5 +1,5 @@
 """
-Sunspot: Simple and light-weight ephemeris engine for automated telescope guidance and astronomical observation.
+Sunspot: Simple and light-weight JPL ephemeris parser and tracking engine for astronomy and telescope guidance. Provides simple lists of ephemeris data for any Target Body available through the JPL Horizons App. Also provides real-time tracking of those data for the duration of an ephemeris.
 
 Powered by NASA/JPL Horizons Ephemeris API, which is not affiliated with Sunspot.
 For NASA/JPL information, see: https://ssd.jpl.nasa.gov/horizons/manual.html#center
@@ -7,7 +7,7 @@ For NASA/JPL information, see: https://ssd.jpl.nasa.gov/horizons/manual.html#cen
 __author__ = "Phillip Curtsmith"
 __copyright__ = "Copyright 2023, Phillip Curtsmith"
 
-__license__ = "MIT"
+__license__ = "GPL-2.0"
 __version__ = "1.0.1"
 __maintainer__ = "Phillip Curtsmith"
 __email__ = "phillip.curtsmith@gmail.com"
@@ -28,6 +28,7 @@ class Ephemeris:
         :param observer_location: '00,00,00' as 'latitude [fractional degrees], longitude [fractional degrees], elevation [kilometers]'
         :param step_size: 'n t', where 1 <= n <= 90024 (the maximum number of entries) and t is a unit of time, e.g., 'minute', 'hour', 'day', 'month', 'year'
         :param target_body: observable target from JPL index, here: https://ssd.jpl.nasa.gov/horizons/app.html#/
+        :param quantities: observer quantities from JPL index, here: https://ssd.jpl.nasa.gov/horizons/app.html#/ . Default includes right ascension, declination, and altitude/azimuth
         """
         self.RAW_DATA = get_jpl_ephemeris( start_time, stop_time, observer_location, step_size, target_body, quantities )
         self.DATA_ENTRIES_RAW, self.DATA_ENTRIES, self.DATA_TITLES = self.clean_ephemeris_data()
@@ -49,6 +50,7 @@ class Ephemeris:
         :return: A dictionary of ephemeris data, where keys are data column titles and each value is a list of data corresponding to that title. Entries in each list are in chronological order.
         """
         from collections import defaultdict
+        from datetime import datetime
         ephemeris = defaultdict( list )
         for row in self.DATA_ENTRIES:
             row_items = row.split( ',' )
@@ -56,11 +58,22 @@ class Ephemeris:
             row_items = [ i for i in row_items if i not in SOLAR_AND_LUNAR_PRESENCE_SYMBOLS ]
             for column in range( len(self.DATA_TITLES) ):
                 ephemeris[ self.DATA_TITLES[column] ].append( row_items[column] )
+        # Scrub dates to include numeric months rather than strings, e.g., 'Feb' becomes '02'
+        dates = ephemeris.get( self.DATA_TITLES[0] )
+        for k, entry in enumerate( dates ):
+            dates[k] = convert_numeric_month( entry )
+        # JPL omits 'seconds' unit completely if user enters HH:MM:SS where SS=00. If present, fix.
+        try:
+            datetime.strptime( dates[0], DATA_FORMAT )
+        except ValueError:
+            zeros = ":00"
+            for k, entry in enumerate( dates ):
+                dates[k] = entry + zeros
         return ephemeris
 
     def get_ephemeris_data( self, column_title: str ) -> list:
         """
-        :param column_title: String title corresponding to a column of ephemeris data, e.g., "Date__(UT)__HR:MN:SS"
+        :param column_title: String title corresponding to a column of ephemeris data, e.g., "Date__(UT)__HR:MN:SS" or Ephemeris.DATA_TITLES[n] where n is a valid index.
         :return: A list of data corresponding to an ephemeris data column title. Entries in this list are in chronological order.
         """
         if not self.DATA_TITLES.__contains__( column_title ):
@@ -95,16 +108,124 @@ class Ephemeris:
 
 
 class Tracker:
+
+    def __init__( self, e: Ephemeris,
+                  track_before_method: callable( list ) = None,
+                  track_on_time_method: callable( list ) = None,
+                  track_after_method: callable( list ) = None,
+                  verbose: bool = False ):
+        """
+        Create Tracker object. Tracking begins automatically upon object creation. Tracker objects will automatically track beginning with the next-soonest date. If no next-soonest date, e.g., all dates are in past, SystemError results.
+        :param e: Ephemeris object.
+        :param track_before_method: User-defined method. Must accept list of strings corresponding to Ephemeris _Observer Quantities_. Optional argument.
+        :param track_on_time_method: User-defined method. Must accept list of strings corresponding to Ephemeris _Observer Quantities_. Optional argument.
+        :param track_after_method: User-defined method. Must accept list of strings corresponding to Ephemeris _Observer Quantities_. Optional argument.
+        :param verbose: If True, prints method execution time stamps to terminal.
+        """
+        self.verbose = verbose
+        self.ephemeris = e
+        starting_index = self.next_event_index( e )
+        if starting_index is None:
+            raise SystemError( "All Ephemeris entries are in the past! One cannot track past events." )
+        if self.verbose:
+            print( "First scheduled tracking event: [" + e.dates()[starting_index] + "]" )
+
+        # Start tracking thread
+        import threading
+        import signal
+        self.exit_event_trigger = threading.Event()
+        signal.signal( signal.SIGINT, self.terminate_tracking )
+        self.c = threading.Thread( target = self.track, args = [ track_before_method,
+                                                                 track_on_time_method,
+                                                                 track_after_method,
+                                                                 starting_index ] )
+        self.c.start()
+
+    def terminate_tracking( self ) -> None:
+        """
+        Terminate tracking for a current Tracker object.
+        :return: None
+        """
+        self.exit_event_trigger.set()
+
+    def user_cancelled_tracking( self ) -> bool:
+        if not self.exit_event_trigger:
+            if self.verbose:
+                print( "SUNSPOT#TRACKER: Tracking cancelled by user." )
+            return True
+        return False
+
+    def track( self, before_method, on_time_method, after_method, starting_index ):
+        from datetime import datetime
+        count = starting_index
+        dates = self.ephemeris.dates()
+        for i in range( starting_index, len( dates ) ):
+            method_arguments = self.collate_arguments( count )
+            #
+            # CALL BEFORE_METHOD
+            #
+            if self.user_cancelled_tracking():
+                break
+            if before_method is not None:
+                if self.verbose:
+                    print( "SUNSPOT#TRACKER#CALL-BEFORE: Scheduled event [" + dates[count] + "] executed at [" + f'{datetime.now():%Y-%m-%d %H:%M:%S%z}' + "]." )
+                before_method( method_arguments )
+            #
+            # DELAY
+            #
+            if self.exit_event_trigger.wait( timeout = sleep_time( dates[count] ) ):
+                if self.verbose:
+                    print( "SUNSPOT#TRACKER: Tracking cancelled by user." )
+                break
+            #
+            # CALL ON_TIME_METHOD
+            #
+            if self.user_cancelled_tracking():
+                break
+            if on_time_method is not None:
+                if self.verbose:
+                    print( "SUNSPOT#TRACKER#CALL-ON-TIME: Scheduled event [" + dates[count] + "] executed at [" + f'{datetime.now():%Y-%m-%d %H:%M:%S%z}' + "]." )
+                on_time_method( method_arguments )
+            #
+            # CALL AFTER_METHOD
+            #
+            if self.user_cancelled_tracking():
+                break
+            if after_method is not None:
+                if self.verbose:
+                    print( "SUNSPOT#TRACKER#CALL-AFTER: Scheduled event [" + dates[count] + "] executed at [" + f'{datetime.now():%Y-%m-%d %H:%M:%S%z}' + "]." )
+                after_method( method_arguments )
+            #
+            count = count + 1
+        if not self.exit_event_trigger.is_set():
+            if self.verbose:
+                print( "SUNSPOT#TRACKER: Ephemeris tracking completed normally at [" + f'{datetime.now():%Y-%m-%d %H:%M:%S%z}' + "]." )
+
+    def collate_arguments( self, count ) -> list:
+        args = []
+        for i in self.ephemeris.DATA_TITLES:
+            args.append( self.ephemeris.get_ephemeris_data(i)[ count ] )
+        return args
+
+    def next_event_index( self, e: Ephemeris ):
+        from datetime import datetime
+        dates = e.dates()
+        for i in dates:
+            if datetime.now().timestamp() < datetime.strptime( i, DATA_FORMAT ).timestamp():
+                return dates.index( i )
+        return None
+
+
+def sleep_time( future ) -> float:
     """
-    Create Tracker object
-        - Constructor arguments:
-            - Ephemeris object
-            - Ephemeris column label(s) for tracking
-            - User local method to invoke
-        - Method to kill Tracker
+    :return: The difference, in seconds, between the moment this function is called and the (future) datetime passed as argument.
+    If return value is negative (e.g., an event presumed to be in the future is actually in the past), throws exception.
     """
-    def __init__( self, e: Ephemeris ):
-        pass
+    from datetime import datetime
+    delay = datetime.strptime( future, DATA_FORMAT ).timestamp() - datetime.now().timestamp()
+    if delay < 0:
+        raise SystemError( "Tracker timing error: attempting to track object at time [" + future + "] indicates this time has already passed. Possibly the result of a long-running user process delaying thread execution." )
+    return delay
 
 
 def convert_numeric_month( r ) -> str:
@@ -174,13 +295,13 @@ def validate_ephemeris_data( response ) -> None:
     if "Unknown quantity requested" in response:
         raise SystemError( p + "'Unknown quantity requested'. Check 'quantity' argument for recovering JPL ephemeris." )
     if "$$SOE" not in response:
-        raise SystemError( "NASA/JPL Horizons API response invalid. Check sunspot.Ephemeris argument format." )
+        raise SystemError( "NASA/JPL Horizons API response invalid. Check src.Ephemeris argument format." )
 
 
 def validate_jpl_ephemeris_date(t):
     from datetime import datetime
     try:
-        d = datetime.strptime( convert_numeric_month(t), DATA_FORMAT )
+        d = datetime.strptime( t, DATA_FORMAT )
     except ValueError as e:
         raise SystemError( "Invalid date format! Dates must be in format YYYY-MM-DD HH:MM:SS as 24h clock." ) from e
     if d.timestamp() < datetime.strptime( '1599-12-10 23:59:00', DATA_FORMAT ).timestamp():
@@ -196,12 +317,3 @@ def validate_jpl_ephemeris_step_unit( u ):
             raise SystemError( error )
     except IndexError:
         raise SystemError( error )
-
-
-def fixture() -> Ephemeris:
-    return Ephemeris( '1988-12-08 01:02:03', '1990-04-22 04:05:06', '-71.332597,42.458790,0.041', '1 day', '10' )
-
-
-def terminal_print( e = fixture() ):
-    for i in e.DATA_ENTRIES_RAW:
-        print( i )
