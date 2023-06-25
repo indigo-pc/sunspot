@@ -1,3 +1,5 @@
+<link href="https://github.com/sindresorhus/github-markdown-css/blob/main/github-markdown-dark.css" rel="stylesheet"></link> 
+
 <p align="center">
   <img src="sunspot.png" width="250">
 </p>
