@@ -1,12 +1,10 @@
-<link href="https://github.com/sindresorhus/github-markdown-css/blob/main/github-markdown-dark.css" rel="stylesheet"></link> 
-
 <p align="center">
-  <img src="sunspot.png" width="250">
+  <img src="https://github.com/phillipcurtsmith/sunspot-issues/blob/main/sunspot.png?raw=true" width="250">
 </p>
 
 Simple and light-weight JPL ephemeris parser and tracking engine for astronomy and telescope guidance. Provides simple lists of ephemeris data for any _Target Body_ available through the [JPL Horizons App](https://ssd.jpl.nasa.gov/horizons/app.html#/). Also provides real-time tracking of those data for the duration of an ephemeris.
 
-Project Description
+Sunspot
 -
 Sunspot recovers ephemerides using JPL's back-end HTML interface. As a result, no need to load binary SPK files (.bsp). A user must only identify a _Target Body_ and _Observer Quantities_ from the [JPL Horizons App](https://ssd.jpl.nasa.gov/horizons/app.html#/). Any planet, satellite, spacecraft, asteroid, or comet available in the [JPL Horizons App](https://ssd.jpl.nasa.gov/horizons/app.html#/) is available through Sunspot. Sunspot provides simple parsed lists of strings for each quantity, e.g., a list of azimuth and elevation values where a _Target Body_ can be found in the sky. Because all data are computed and furnished from JPL, Sunspot incurs very little computational overhead aside from initial parsing.
 
@@ -34,7 +32,7 @@ And one can simply view a list of those data:
 ```python
 >>> azimuth = titles[1]
 >>> e.get_ephemeris_data( azimuth )
-['252.781222419', '253.019121568', ... , '252.896492970', '253.133817632']]
+['252.781222419', '253.019121568', ... , '252.896492970', '253.133817632']
 ```
 For each data point in every list, there is a corresponding time stamp. One can use the convenience method to view the time stamps:
 ```python
@@ -83,7 +81,7 @@ def after( args: list ):
     # e.g., do 'clean-up' stuff here
     ...
 ```
-User-defined functions **must** accept a list of strings. This list corresponds to the _Observer Quantities_ for a given Ephemeris entry. For the example Ephemeris above, Tracker methods will be called with a list of two strings, where the first string is ```'Azimuth_(a-app)'``` and the second is ```'Elevation_(a-app)'```. The order of the arguments in the list are the same order as ````e.DATA_TITLES````.
+User-defined functions **must** accept a list of strings. This list corresponds to the _Observer Quantities_ for a given Ephemeris entry. For the example Ephemeris above, Tracker methods will be called with a list of three strings: ```'Date__(UT)__HR:MN:SS'```,  ```'Azimuth_(a-app)'```, and ```'Elevation_(a-app)'```. The order of the arguments in the list are the same order as ````e.DATA_TITLES````.
 
 Tracker has a simple constructor to begin tracking:
 

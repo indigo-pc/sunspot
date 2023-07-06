@@ -7,8 +7,6 @@ For NASA/JPL information, see: https://ssd.jpl.nasa.gov/horizons/manual.html#cen
 __author__ = "Phillip Curtsmith"
 __copyright__ = "Copyright 2023, Phillip Curtsmith"
 
-__license__ = "GPL-2.0"
-__version__ = "1.0.1"
 __maintainer__ = "Phillip Curtsmith"
 __email__ = "phillip.curtsmith@gmail.com"
 """
@@ -149,7 +147,7 @@ class Tracker:
         self.exit_event_trigger.set()
 
     def user_cancelled_tracking( self ) -> bool:
-        if not self.exit_event_trigger:
+        if self.exit_event_trigger.is_set():
             if self.verbose:
                 print( "SUNSPOT#TRACKER: Tracking cancelled by user." )
             return True
@@ -216,15 +214,17 @@ class Tracker:
         return None
 
 
-def sleep_time( future ) -> float:
+def sleep_time( future, verbose ) -> float:
     """
     :return: The difference, in seconds, between the moment this function is called and the (future) datetime passed as argument.
     If return value is negative (e.g., an event presumed to be in the future is actually in the past), throws exception.
     """
     from datetime import datetime
+    if verbose:
+        print( "SUNSPOT#TRACKER: Delay event initiated at [" + f'{datetime.now():%Y-%m-%d %H:%M:%S%z}' + "] for future time [" + future + "]." )
     delay = datetime.strptime( future, DATA_FORMAT ).timestamp() - datetime.now().timestamp()
     if delay < 0:
-        raise SystemError( "Tracker timing error: attempting to track object at time [" + future + "] indicates this time has already passed. Possibly the result of a long-running user process delaying thread execution." )
+        raise SystemError( "Tracker timing error. attempting to track object at time [" + future + "] indicates this time has already passed. Possibly the result of a long-running user process delaying thread execution." )
     return delay
 
 
