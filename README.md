@@ -2,6 +2,10 @@
   <img src="https://github.com/phillipcurtsmith/sunspot/blob/main/sunspot.png?raw=true" width="250">
 </p>
 
+pip install sunspot
+
+--
+
 Simple and light-weight JPL ephemeris parser and tracking engine for astronomy and telescope guidance. Provides simple lists of ephemeris data for any _Target Body_ available through the [JPL Horizons App](https://ssd.jpl.nasa.gov/horizons/app.html#/). Also provides real-time tracking of those data for the duration of an ephemeris.
 
 Sunspot
